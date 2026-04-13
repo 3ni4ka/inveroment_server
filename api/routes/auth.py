@@ -163,23 +163,35 @@ async def terminate_session(
 
 @router.post("/change-password")
 async def change_password(
-    old_password: str,
+    user_id: int,
     new_password: str,
     current_user: dict = Depends(get_current_user),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Смена пароля."""
-    user = await user_repository.get_by_id(current_user['id'])
-    
-    if not password_hasher.verify_password(old_password, user['password_hash']):
-        raise HTTPException(400, "Wrong old password")
-    
+    # ✅ Проверка роли
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Only admin can change other users passwords"
+        )
+
+    # ✅ Проверка длины пароля (дублируем на всякий случай)
     if len(new_password) < 4:
         raise HTTPException(400, "Password must be at least 4 characters")
-    
+
+    # ✅ Получаем пользователя
+    user = await user_repository.get_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # ✅ Хешируем пароль
     new_hash = password_hasher.hash_password(new_password)
+
+    # ✅ Обновляем пароль
     success = await user_repository.change_password(current_user['id'], new_hash)
-    
+
     if success:
         # Завершаем все остальные сессии (кроме текущей)
         current_session_id = current_user.get('session_id')

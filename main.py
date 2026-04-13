@@ -1,24 +1,34 @@
 import asyncio
 import logging
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from api.routes import auth, stock, health, material_groups
+from api.routes import auth, stock, health, material_groups, users
 from config import config
 from infrastructure.database.connection_pool import database_service
-from api.routes import health
 
-# Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Создаём FastAPI приложение
-app = FastAPI(
-    title="Warehouse Inventory API",
-    description="API для учёта материалов в отделе",
-    version="1.0.0"
+app = FastAPI(title="Warehouse Inventory API", version="1.0.0")
+
+# CORS middleware - разрешаем доступ из локальной сети
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://192.168.1.137:5173",  # IP сервера с клиентом
+        "http://192.168.1.*",  # вся сеть (не работает, нужно указывать конкретные)
+        # Или для всех (только для теста)
+        "*"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Регистрируем роуты
@@ -26,37 +36,27 @@ app.include_router(health.router, prefix="", tags=["System"])
 app.include_router(auth.router)
 app.include_router(stock.router)
 app.include_router(material_groups.router)
+app.include_router(users.router)
+
+# Добавим тестовый эндпоинт для проверки CORS
+@app.options("/test-cors")
+async def test_cors():
+    return {"message": "CORS works!"}
 
 class WarehouseServer:
-    """Главный класс сервера"""
-    
-    def __init__(self):
-        self.is_running = False
-        
     async def start(self):
-        """Запуск сервера"""
         logger.info("🚀 Starting Warehouse Server...")
-        
-        # Запускаем сервис БД
         await database_service.start()
-        
-        self.is_running = True
         logger.info(f"✅ Server started on http://{config.server.host}:{config.server.port}")
-        logger.info(f"📖 API docs: http://{config.server.host}:{config.server.port}/docs")
         
     async def stop(self):
-        """Остановка сервера"""
         logger.info("🛑 Stopping Warehouse Server...")
-        self.is_running = False
         await database_service.stop()
-        logger.info("✅ Server stopped")
 
 async def main():
-    """Точка входа"""
     server = WarehouseServer()
     await server.start()
     
-    # Запускаем FastAPI сервер
     config_uv = uvicorn.Config(
         app=app,
         host=config.server.host,
@@ -71,5 +71,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
