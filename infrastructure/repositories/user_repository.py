@@ -125,13 +125,18 @@ class UserRepository(UserRepositoryInterface):
         
         if is_active is not None:
             updates.append("is_active = %s")
-            params.append(is_active)
+            # Преобразуем bool в int (1 или 0)
+            params.append(1 if is_active else 0)
+            logger.info(f"Setting is_active to: {1 if is_active else 0}")
         
         if not updates:
             return True
         
         query = f"UPDATE users SET {', '.join(updates)} WHERE id = %s"
         params.append(user_id)
+        
+        logger.info(f"UPDATE query: {query}")
+        logger.info(f"Params: {params}")
         
         rows = await self.db.execute(query, tuple(params))
         logger.info(f"User updated: id={user_id}, rows={rows}")
@@ -156,7 +161,7 @@ class UserRepository(UserRepositoryInterface):
         query = "UPDATE users SET last_login = NOW() WHERE id = %s"
         rows = await self.db.execute(query, (user_id,))
         return rows > 0
-    
+
     async def get_stats(self) -> Dict:
         """Получить статистику по пользователям"""
         query = """
@@ -169,6 +174,7 @@ class UserRepository(UserRepositoryInterface):
             FROM users
         """
         result = await self.db.fetch_one(query)
+        logger.info(f"Stats result: {result}")
         return result or {'total': 0, 'active': 0, 'inactive': 0, 'admins': 0, 'users': 0}
 
 
