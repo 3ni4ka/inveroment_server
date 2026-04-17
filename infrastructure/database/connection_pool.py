@@ -25,7 +25,9 @@ class DatabaseService:
                 minsize=3,
                 maxsize=config.db.pool_size,
                 pool_recycle=config.db.pool_recycle,
-                autocommit=False,
+                # Keep autocommit enabled for normal CRUD operations.
+                # Explicit multi-step transactions are handled in transaction().
+                autocommit=True,
                 charset='utf8mb4'
             )
             self.is_running = True

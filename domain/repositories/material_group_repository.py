@@ -10,7 +10,7 @@ class MaterialGroupRepositoryInterface(ABC):
     """Интерфейс репозитория групп материалов"""
     
     @abstractmethod
-    async def create(self, name: str, parent_id: Optional[int] = None) -> int:
+    async def create(self, name: str, equipment_group_ids: Optional[List[int]] = None) -> int:
         """Создание группы"""
         pass
     
@@ -23,19 +23,20 @@ class MaterialGroupRepositoryInterface(ABC):
     async def get_all(self, include_children_count: bool = True) -> List[Dict]:
         """Получение всех групп"""
         pass
-    
+
     @abstractmethod
-    async def get_tree(self) -> List[Dict]:
-        """Получение древовидной структуры"""
+    async def get_by_equipment_group_id(self, equipment_group_id: int) -> List[Dict]:
+        """Получение групп материалов по ID группы оборудования"""
         pass
     
     @abstractmethod
-    async def get_children(self, parent_id: int) -> List[Dict]:
-        """Получение дочерних групп"""
-        pass
-    
-    @abstractmethod
-    async def update(self, group_id: int, name: str = None, parent_id: int = None) -> bool:
+    async def update(
+        self,
+        group_id: int,
+        name: str = None,
+        equipment_group_ids: Optional[List[int]] = None,
+        update_equipment_groups: bool = False
+    ) -> bool:
         """Обновление группы"""
         pass
     
@@ -46,7 +47,7 @@ class MaterialGroupRepositoryInterface(ABC):
     
     @abstractmethod
     async def has_children(self, group_id: int) -> bool:
-        """Проверка наличия дочерних групп"""
+        """Совместимость: подгруппы не поддерживаются"""
         pass
     
     @abstractmethod
@@ -55,6 +56,6 @@ class MaterialGroupRepositoryInterface(ABC):
         pass
     
     @abstractmethod
-    async def get_path(self, group_id: int) -> List[Dict]:
-        """Получение пути от корня до группы"""
+    async def get_existing_equipment_group_ids(self, equipment_group_ids: List[int]) -> List[int]:
+        """Получение существующих equipment_group IDs"""
         pass

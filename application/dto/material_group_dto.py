@@ -10,33 +10,26 @@ from datetime import datetime
 class MaterialGroupCreate(BaseModel):
     """Создание группы материалов"""
     name: str = Field(..., min_length=1, max_length=255, description="Название группы")
-    parent_id: Optional[int] = Field(None, description="ID родительской группы")
+    equipment_group_ids: List[int] = Field(default_factory=list, description="ID групп оборудования")
 
 
 class MaterialGroupUpdate(BaseModel):
     """Обновление группы материалов"""
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Название группы")
-    parent_id: Optional[int] = Field(None, description="ID родительской группы")
+    equipment_group_ids: Optional[List[int]] = Field(None, description="ID групп оборудования")
+
+
+class EquipmentGroupRef(BaseModel):
+    """Краткая информация о группе оборудования"""
+    id: int
+    name: str
 
 
 class MaterialGroupResponse(BaseModel):
     """Ответ с данными группы материалов"""
     id: int
     name: str
-    parent_id: Optional[int] = None
-    parent_name: Optional[str] = None
-    children_count: int = 0
+    equipment_group_ids: List[int] = Field(default_factory=list)
+    equipment_groups: List[EquipmentGroupRef] = Field(default_factory=list)
+    materials_count: int = 0
     created_at: Optional[datetime] = None
-
-
-class MaterialGroupTreeResponse(BaseModel):
-    """Древовидная структура групп"""
-    id: int
-    name: str
-    parent_id: Optional[int] = None
-    children: List['MaterialGroupTreeResponse'] = []
-    level: int = 0
-
-
-# Для рекурсивных ссылок
-MaterialGroupTreeResponse.model_rebuild()

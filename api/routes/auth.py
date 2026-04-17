@@ -197,8 +197,8 @@ async def change_password(
     
     raise HTTPException(500, "Failed to change password")
 
-# Отладочный вывод
-print(f"✅ Auth router: {len(router.routes)} routes registered")
+# Отладочный вывод (ASCII only for Windows cp1251 console)
+print(f"Auth router: {len(router.routes)} routes registered")
 for route in router.routes:
-    methods = list(route.methods) if hasattr(route, 'methods') else ['ANY']
+    methods = list(route.methods) if hasattr(route, "methods") else ["ANY"]
     print(f"   {methods[0]:6} {route.path}")

@@ -3,14 +3,13 @@
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List, Optional
+from typing import List
 import logging
 
 from application.dto.material_group_dto import (
     MaterialGroupCreate,
     MaterialGroupUpdate,
-    MaterialGroupResponse,
-    MaterialGroupTreeResponse
+    MaterialGroupResponse
 )
 from infrastructure.repositories.material_group_repository import material_group_repository
 from api.middleware.auth import get_admin_user, get_current_user
@@ -18,6 +17,7 @@ from api.middleware.auth import get_admin_user, get_current_user
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/material-groups", tags=["Material Groups"])
+equipment_router = APIRouter(prefix="/api/equipment-groups", tags=["Material Groups"])
 
 
 @router.get(
@@ -32,16 +32,26 @@ async def get_all_groups(current_user: dict = Depends(get_current_user)):
     return groups
 
 
-@router.get(
-    "/tree",
-    response_model=List[MaterialGroupTreeResponse],
-    summary="Дерево групп",
-    description="Возвращает древовидную структуру групп материалов"
+@equipment_router.get(
+    "/{equipment_group_id}/material-groups",
+    response_model=List[MaterialGroupResponse],
+    summary="Группы материалов по группе оборудования",
+    description="Возвращает список групп материалов, привязанных к указанной группе оборудования"
 )
-async def get_groups_tree(current_user: dict = Depends(get_current_user)):
-    """Получить дерево групп материалов (требует авторизации)"""
-    tree = await material_group_repository.get_tree()
-    return tree
+async def get_material_groups_by_equipment_group(
+    equipment_group_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Получить группы материалов по ID группы оборудования (требует авторизации)"""
+    existing_equipment_group_ids = await material_group_repository.get_existing_equipment_group_ids([equipment_group_id])
+    if not existing_equipment_group_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Equipment group with id {equipment_group_id} not found"
+        )
+
+    groups = await material_group_repository.get_by_equipment_group_id(equipment_group_id)
+    return groups
 
 
 @router.get(
@@ -64,42 +74,6 @@ async def get_group_by_id(
     return group
 
 
-@router.get(
-    "/{group_id}/children",
-    response_model=List[MaterialGroupResponse],
-    summary="Дочерние группы",
-    description="Возвращает дочерние группы указанной группы"
-)
-async def get_children_groups(
-    group_id: int,
-    current_user: dict = Depends(get_current_user)
-):
-    """Получить дочерние группы (требует авторизации)"""
-    children = await material_group_repository.get_children(group_id)
-    return children
-
-
-@router.get(
-    "/{group_id}/path",
-    summary="Путь к группе",
-    description="Возвращает путь от корня до указанной группы"
-)
-async def get_group_path(
-    group_id: int,
-    current_user: dict = Depends(get_current_user)
-):
-    """Получить путь к группе (требует авторизации)"""
-    group = await material_group_repository.get_by_id(group_id)
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Group with id {group_id} not found"
-        )
-    
-    path = await material_group_repository.get_path(group_id)
-    return {"path": path}
-
-
 # ============ Административные эндпоинты (только admin) ============
 
 @router.post(
@@ -115,17 +89,19 @@ async def create_group(
 ):
     """Создать новую группу материалов (только admin)"""
     try:
-        if group_data.parent_id:
-            parent = await material_group_repository.get_by_id(group_data.parent_id)
-            if not parent:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Parent group with id {group_data.parent_id} not found"
-                )
+        existing_equipment_group_ids = await material_group_repository.get_existing_equipment_group_ids(
+            group_data.equipment_group_ids
+        )
+        missing_equipment_group_ids = sorted(set(group_data.equipment_group_ids) - set(existing_equipment_group_ids))
+        if missing_equipment_group_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Equipment groups not found: {missing_equipment_group_ids}"
+            )
         
         group_id = await material_group_repository.create(
             name=group_data.name,
-            parent_id=group_data.parent_id
+            equipment_group_ids=group_data.equipment_group_ids
         )
         
         new_group = await material_group_repository.get_by_id(group_id)
@@ -163,25 +139,26 @@ async def update_group(
             detail=f"Group with id {group_id} not found"
         )
     
-    if group_data.parent_id:
-        if group_data.parent_id == group_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot set group as its own parent"
-            )
-        
-        parent = await material_group_repository.get_by_id(group_data.parent_id)
-        if not parent:
+    update_equipment_groups = "equipment_group_ids" in group_data.model_fields_set
+    new_equipment_group_ids = group_data.equipment_group_ids if update_equipment_groups else None
+
+    if update_equipment_groups:
+        existing_equipment_group_ids = await material_group_repository.get_existing_equipment_group_ids(
+            new_equipment_group_ids or []
+        )
+        missing_equipment_group_ids = sorted(set(new_equipment_group_ids or []) - set(existing_equipment_group_ids))
+        if missing_equipment_group_ids:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Parent group with id {group_data.parent_id} not found"
+                detail=f"Equipment groups not found: {missing_equipment_group_ids}"
             )
     
     try:
         success = await material_group_repository.update(
             group_id=group_id,
             name=group_data.name,
-            parent_id=group_data.parent_id
+            equipment_group_ids=new_equipment_group_ids,
+            update_equipment_groups=update_equipment_groups
         )
         
         if not success:

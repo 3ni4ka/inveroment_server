@@ -36,6 +36,7 @@ app.include_router(health.router, prefix="", tags=["System"])
 app.include_router(auth.router)
 app.include_router(stock.router)
 app.include_router(material_groups.router)
+app.include_router(material_groups.equipment_router)
 app.include_router(users.router)
 
 # Добавим тестовый эндпоинт для проверки CORS
@@ -45,26 +46,30 @@ async def test_cors():
 
 class WarehouseServer:
     async def start(self):
-        logger.info("🚀 Starting Warehouse Server...")
+        logger.info("Starting Warehouse Server...")
         await database_service.start()
-        logger.info(f"✅ Server started on http://{config.server.host}:{config.server.port}")
+        logger.info(f"Server initialized on http://{config.server.host}:{config.server.port}")
         
     async def stop(self):
-        logger.info("🛑 Stopping Warehouse Server...")
+        logger.info("Stopping Warehouse Server...")
         await database_service.stop()
 
 async def main():
     server = WarehouseServer()
-    await server.start()
-    
-    config_uv = uvicorn.Config(
-        app=app,
-        host=config.server.host,
-        port=config.server.port,
-        log_level="info"
-    )
-    server_uv = uvicorn.Server(config_uv)
-    await server_uv.serve()
+    try:
+        await server.start()
+        
+        config_uv = uvicorn.Config(
+            app=app,
+            host=config.server.host,
+            port=config.server.port,
+            log_level="info"
+        )
+        server_uv = uvicorn.Server(config_uv)
+        await server_uv.serve()
+    finally:
+        if database_service.is_running:
+            await server.stop()
 
 if __name__ == "__main__":
     try:

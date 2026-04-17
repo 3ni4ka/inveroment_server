@@ -20,11 +20,16 @@ class UserRepositoryInterface(ABC):
         pass
     
     @abstractmethod
-    async def get_all(self) -> List[Dict]:
+    async def get_all(self, include_inactive: bool = False) -> List[Dict]:
         """Получить всех пользователей"""
         pass
     
     @abstractmethod
     async def update_last_login(self, user_id: int) -> bool:
         """Обновить время последнего входа"""
+        pass
+
+    @abstractmethod
+    async def get_stats(self) -> Dict:
+        """Получить статистику по пользователям"""
         pass
