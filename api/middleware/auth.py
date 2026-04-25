@@ -2,7 +2,7 @@
 Middleware для проверки JWT токена
 """
 
-from fastapi import HTTPException, Depends, status
+from fastapi import HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 import logging
@@ -16,21 +16,34 @@ security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ):
     """
-    Получение текущего пользователя из JWT токена
+    Получение текущего пользователя из JWT токена.
+    
+    Поддерживает два способа передачи токена:
+    1. Заголовок: Authorization: Bearer <token>
+    2. Query параметр: ?token=<token> (для SSE)
     """
-    if not credentials:
+    token = None
+    
+    # 1. Пробуем получить из заголовка Authorization
+    if credentials:
+        token = credentials.credentials
+    
+    # 2. Если нет в заголовке, пробуем из query параметра
+    if not token:
+        token = request.query_params.get('token')
+    
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    token = credentials.credentials
-    
-    # 1. Проверяем JWT токен
+    # 3. Проверяем JWT токен
     payload = jwt_handler.verify_token(token)
     if not payload:
         raise HTTPException(
@@ -39,7 +52,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 2. Проверяем сессию в памяти
+    # 4. Проверяем сессию в памяти
     session = session_manager.validate_session(token)
     if not session:
         raise HTTPException(
@@ -53,7 +66,7 @@ async def get_current_user(
         "login": session['login'],
         "role": session['role'],
         "full_name": session.get('full_name'),
-        "session_id": session.get('session_id') 
+        "session_id": session.get('session_id')
     }
 
 

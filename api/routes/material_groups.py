@@ -139,14 +139,29 @@ async def update_group(
             detail=f"Group with id {group_id} not found"
         )
     
-    update_equipment_groups = "equipment_group_ids" in group_data.model_fields_set
-    new_equipment_group_ids = group_data.equipment_group_ids if update_equipment_groups else None
+    # --- Logic to handle both equipment_group_id and equipment_group_ids ---
 
+    # Определяем, было ли передано хотя бы одно из полей для связи
+    update_equipment_groups = ("equipment_group_ids" in group_data.model_fields_set or
+                               "equipment_group_id" in group_data.model_fields_set)
+
+    new_equipment_group_ids = None
     if update_equipment_groups:
+        # Собираем ID из обоих полей, чтобы обеспечить совместимость
+        all_ids = set()
+        if group_data.equipment_group_ids is not None:
+            all_ids.update(group_data.equipment_group_ids)
+        if group_data.equipment_group_id is not None:
+            all_ids.add(group_data.equipment_group_id)
+        
+        new_equipment_group_ids = list(all_ids)
+
+    # Проверяем ID оборудования, только если они были переданы
+    if update_equipment_groups and new_equipment_group_ids:
         existing_equipment_group_ids = await material_group_repository.get_existing_equipment_group_ids(
-            new_equipment_group_ids or []
+            new_equipment_group_ids
         )
-        missing_equipment_group_ids = sorted(set(new_equipment_group_ids or []) - set(existing_equipment_group_ids))
+        missing_equipment_group_ids = sorted(set(new_equipment_group_ids) - set(existing_equipment_group_ids))
         if missing_equipment_group_ids:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -154,6 +169,7 @@ async def update_group(
             )
     
     try:
+        logger.debug(f"Calling repository update with: group_id={group_id}, name={group_data.name}, equipment_group_ids={new_equipment_group_ids}, update_equipment_groups={update_equipment_groups}")
         success = await material_group_repository.update(
             group_id=group_id,
             name=group_data.name,

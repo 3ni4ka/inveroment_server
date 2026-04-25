@@ -162,25 +162,33 @@ class MaterialGroupRepository(MaterialGroupRepositoryInterface):
         update_equipment_groups: bool = False
     ) -> bool:
         """Обновление группы"""
-        updated = False
         normalized_equipment_group_ids = list(dict.fromkeys(equipment_group_ids or []))
 
         async with self.db.get_connection() as conn:
             try:
                 await conn.begin()
                 async with conn.cursor() as cur:
+                    # 1. Проверяем, существует ли группа и блокируем строку
+                    await cur.execute("SELECT 1 FROM material_groups WHERE id = %s FOR UPDATE", (group_id,))
+                    if cur.rowcount == 0:
+                        await conn.rollback()
+                        return False  # Группа не найдена
+
+                    # 2. Обновляем имя, если оно предоставлено
                     if name is not None:
-                        rows = await cur.execute(
+                        await cur.execute(
                             "UPDATE material_groups SET name = %s WHERE id = %s",
                             (name, group_id)
                         )
-                        updated = updated or rows > 0
 
+                    # 3. Обновляем связи, если флаг установлен
                     if update_equipment_groups:
+                        # Удаляем старые связи
                         await cur.execute(
                             "DELETE FROM equipment_group_material_groups WHERE material_group_id = %s",
                             (group_id,)
                         )
+                        # Добавляем новые связи, если они есть
                         if normalized_equipment_group_ids:
                             values = [(equipment_group_id, group_id) for equipment_group_id in normalized_equipment_group_ids]
                             await cur.executemany(
@@ -190,15 +198,16 @@ class MaterialGroupRepository(MaterialGroupRepositoryInterface):
                                 """,
                                 values
                             )
-                        updated = True
-
+                
+                # 4. Фиксируем транзакцию
                 await conn.commit()
+
             except Exception:
                 await conn.rollback()
                 raise
-
+        
         logger.info(f"Material group updated: id={group_id}")
-        return updated
+        return True # Возвращаем True, так как операция для существующей группы успешна
 
     async def delete(self, group_id: int) -> bool:
         """Удаление группы"""

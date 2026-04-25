@@ -1,4 +1,0 @@
-$kind: collection
-description: API для учёта материалов в отделе
-variables:
-  baseUrl: /

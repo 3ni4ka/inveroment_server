@@ -1,8 +1,0 @@
-$kind: http-request
-description: Корневой эндпоинт
-url: "{{baseUrl}}/"
-method: GET
-headers:
-  Accept: application/json
-examples: ./.resources/Root.resources/examples
-order: 1000

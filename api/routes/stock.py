@@ -4,17 +4,20 @@
 
 from fastapi import APIRouter, HTTPException, Depends
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
+from datetime import datetime
 import logging
 
 from application.dto.schemas import (
     StockItemResponse, 
     TransactionRequest, 
-    TransactionResponse
+    TransactionResponse,
+    PaginatedTransactionResponse
 )
 from infrastructure.repositories.stock_repository import StockRepository
 from infrastructure.repositories.transaction_repository import TransactionRepository
 from api.middleware.auth import get_current_user
+from utils.event_broadcaster import broadcaster
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,18 @@ async def material_in(
             comment=request.comment
         )
         logger.info(f"Material IN: user={current_user['login']}, material={request.material_id}, qty={request.quantity}")
+
+        # Broadcast the update via SSE
+        stock_repo = StockRepository()
+        updated_stock = await stock_repo.get_by_material_id(request.material_id)
+        if updated_stock:
+            # Convert Decimal to float for JSON serialization
+            sse_data = {key: float(value) if isinstance(value, Decimal) else value for key, value in dict(updated_stock).items()}
+            await broadcaster.broadcast({
+                "event": "stock_update",
+                "data": sse_data
+            })
+            
         return {
             "status": "success",
             "transaction_id": trans_id,
@@ -132,6 +147,17 @@ async def material_out(
             comment=request.comment
         )
         logger.info(f"Material OUT: user={current_user['login']}, material={request.material_id}, qty={request.quantity}")
+
+        # Broadcast the update via SSE
+        updated_stock = await stock_repo.get_by_material_id(request.material_id)
+        if updated_stock:
+            # Convert Decimal to float for JSON serialization
+            sse_data = {key: float(value) if isinstance(value, Decimal) else value for key, value in dict(updated_stock).items()}
+            await broadcaster.broadcast({
+                "event": "stock_update",
+                "data": sse_data
+            })
+            
         return {
             "status": "success",
             "transaction_id": trans_id,
@@ -147,34 +173,44 @@ async def material_out(
 @router.get(
     "/transactions",
     summary="История операций",
-    description="Возвращает список всех операций (приходов и расходов) с пагинацией."
+    description="Возвращает список всех операций (приходов и расходов) с пагинацией и фильтрацией.",
+    response_model=PaginatedTransactionResponse
 )
 async def get_transactions(
-    limit: int = 100, 
-    offset: int = 0,
-    current_user: dict = Depends(get_current_user)
-):
-    """Получить историю операций"""
-    repo = TransactionRepository()
-    transactions = await repo.get_all(limit, offset)
-    logger.info(f"User {current_user['login']} requested transactions history")
-    return transactions
-
-
-@router.get(
-    "/transactions/material/{material_id}",
-    summary="Движения материала",
-    description="Возвращает историю операций по конкретному материалу."
-)
-async def get_material_transactions(
-    material_id: int, 
+    page: int = 1,
     limit: int = 50,
-    current_user: dict = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    material_id: Optional[int] = None,
+    trans_type: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    current_user: dict = Depends(get_current_user),
 ):
-    """Получить движения по конкретному материалу"""
+    """Получить историю операций с фильтрами"""
     repo = TransactionRepository()
-    movements = await repo.get_by_material(material_id, limit)
-    return movements
+    offset = (page - 1) * limit
+    transactions = await repo.get_all(
+        limit=limit,
+        offset=offset,
+        user_id=user_id,
+        material_id=material_id,
+        trans_type=trans_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    total_count = await repo.get_total_count(
+        user_id=user_id,
+        material_id=material_id,
+        trans_type=trans_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    logger.info(f"User {current_user['login']} requested transactions history with filters")
+    return {
+        "total": total_count,
+        "page": page,
+        "transactions": transactions,
+    }
 
 
 @router.get(

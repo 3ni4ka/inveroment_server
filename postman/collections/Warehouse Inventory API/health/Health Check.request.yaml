@@ -1,8 +1,0 @@
-$kind: http-request
-description: Проверка работоспособности сервера
-url: "{{baseUrl}}/health"
-method: GET
-headers:
-  Accept: application/json
-examples: ./.resources/Health Check.resources/examples
-order: 1000

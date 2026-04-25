@@ -17,6 +17,7 @@ class MaterialGroupUpdate(BaseModel):
     """Обновление группы материалов"""
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Название группы")
     equipment_group_ids: Optional[List[int]] = Field(None, description="ID групп оборудования")
+    equipment_group_id: Optional[int] = Field(None, description="ID группы оборудования (для совместимости)")
 
 
 class EquipmentGroupRef(BaseModel):

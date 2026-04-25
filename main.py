@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from api.routes import auth, stock, health, material_groups, users
+from api.routes import auth, stock, health, material_groups, users, equipment_groups, materials, units, events
 from config import config
 from infrastructure.database.connection_pool import database_service
 
@@ -38,6 +38,10 @@ app.include_router(stock.router)
 app.include_router(material_groups.router)
 app.include_router(material_groups.equipment_router)
 app.include_router(users.router)
+app.include_router(equipment_groups.router)
+app.include_router(materials.router)
+app.include_router(units.router)
+app.include_router(events.router)
 
 # Добавим тестовый эндпоинт для проверки CORS
 @app.options("/test-cors")

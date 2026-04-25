@@ -1,8 +1,0 @@
-$kind: http-request
-description: Тест подключения к БД
-url: "{{baseUrl}}/db-test"
-method: GET
-headers:
-  Accept: application/json
-examples: ./.resources/Test Database.resources/examples
-order: 1000
